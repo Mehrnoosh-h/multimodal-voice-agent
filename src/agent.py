@@ -1,3 +1,4 @@
+
 import json
 import ollama
 
@@ -10,6 +11,9 @@ from tools import (
     get_documents,
     get_support_cases,
     issue_refund,
+    cancel_appointment,
+    reschedule_appointment,
+    create_support_ticket,
 )
 
 
@@ -20,159 +24,189 @@ MODEL_NAME = "qwen3:8b"
 # TOOL DEFINITIONS
 # ============================================================
 
+def define_tool(name, description, properties, required):
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+            },
+        },
+    }
+
+
+def string_parameter(description):
+    return {
+        "type": "string",
+        "description": description,
+    }
+
+
+def confirmation_parameter():
+    return {
+        "type": "boolean",
+        "description": (
+            "True only after the customer explicitly confirms "
+            "the specific action in the conversation."
+        ),
+    }
+
+
 TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_customer",
-            "description": "Get customer account information.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "customer_id": {
-                        "type": "string",
-                        "description": "Customer ID such as C021.",
-                    }
-                },
-                "required": ["customer_id"],
+    define_tool(
+        "get_customer",
+        "Get customer account information.",
+        {
+            "customer_id": string_parameter("Customer ID, such as C021."),
+        },
+        ["customer_id"],
+    ),
+
+    define_tool(
+        "get_appointments",
+        "Get appointments belonging to a customer.",
+        {
+            "customer_id": string_parameter("Customer ID."),
+        },
+        ["customer_id"],
+    ),
+
+    define_tool(
+        "search_available_slots",
+        "Search available appointment slots. All filters are optional.",
+        {
+            "provider_id": {
+                "type": ["string", "null"],
+                "description": "Provider ID, or null.",
+            },
+            "start_date": {
+                "type": ["string", "null"],
+                "description": "Start date YYYY-MM-DD, or null.",
+            },
+            "end_date": {
+                "type": ["string", "null"],
+                "description": "End date YYYY-MM-DD, or null.",
             },
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_appointments",
-            "description": "Get appointments belonging to a customer.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "customer_id": {
-                        "type": "string",
-                    }
-                },
-                "required": ["customer_id"],
-            },
+        [],
+    ),
+
+    define_tool(
+        "get_transactions",
+        "Get billing transactions for a customer.",
+        {
+            "customer_id": string_parameter("Customer ID."),
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_available_slots",
-            "description": "Search available appointment slots.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "provider_id": {
-                        "type": ["string", "null"],
-                    },
-                    "start_date": {
-                        "type": ["string", "null"],
-                    },
-                    "end_date": {
-                        "type": ["string", "null"],
-                    },
-                },
-            },
+        ["customer_id"],
+    ),
+
+    define_tool(
+        "check_duplicate_charge",
+        (
+            "Check for duplicate completed charges and determine "
+            "whether refunds have resolved them."
+        ),
+        {
+            "customer_id": string_parameter("Customer ID."),
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_transactions",
-            "description": "Get billing transactions for a customer.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "customer_id": {
-                        "type": "string",
-                    }
-                },
-                "required": ["customer_id"],
-            },
+        ["customer_id"],
+    ),
+
+    define_tool(
+        "get_documents",
+        "Get document metadata belonging to a customer.",
+        {
+            "customer_id": string_parameter("Customer ID."),
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_duplicate_charge",
-            "description": (
-                "Check whether a customer has duplicate "
-                "completed charges."
+        ["customer_id"],
+    ),
+
+    define_tool(
+        "get_support_cases",
+        "Get support cases for a customer.",
+        {
+            "customer_id": string_parameter("Customer ID."),
+        },
+        ["customer_id"],
+    ),
+
+    define_tool(
+        "issue_refund",
+        (
+            "Issue a refund for a completed payment. "
+            "This is a sensitive action requiring explicit confirmation."
+        ),
+        {
+            "customer_id": string_parameter("Customer ID."),
+            "transaction_id": string_parameter(
+                "Specific transaction ID to refund."
             ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "customer_id": {
-                        "type": "string",
-                    }
-                },
-                "required": ["customer_id"],
-            },
+            "confirmed": confirmation_parameter(),
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_documents",
-            "description": "Get documents belonging to a customer.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "customer_id": {
-                        "type": "string",
-                    }
-                },
-                "required": ["customer_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_support_cases",
-            "description": "Get support cases for a customer.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "customer_id": {
-                        "type": "string",
-                    }
-                },
-                "required": ["customer_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "issue_refund",
-            "description": (
-                "Issue a refund for a completed payment. "
-                "This is a sensitive action. "
-                "Set confirmed=true only when the customer "
-                "explicitly confirms the specific refund."
+        ["customer_id", "transaction_id", "confirmed"],
+    ),
+
+    define_tool(
+        "cancel_appointment",
+        (
+            "Cancel a customer's appointment. "
+            "Requires explicit confirmation of the appointment."
+        ),
+        {
+            "customer_id": string_parameter("Customer ID."),
+            "appointment_id": string_parameter(
+                "Specific appointment ID to cancel."
             ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "customer_id": {
-                        "type": "string",
-                    },
-                    "transaction_id": {
-                        "type": "string",
-                    },
-                    "confirmed": {
-                        "type": "boolean",
-                    },
-                },
-                "required": [
-                    "customer_id",
-                    "transaction_id",
-                    "confirmed",
-                ],
+            "confirmed": confirmation_parameter(),
+        },
+        ["customer_id", "appointment_id", "confirmed"],
+    ),
+
+    define_tool(
+        "reschedule_appointment",
+        (
+            "Move an appointment to a specific available slot "
+            "for the same provider. Requires explicit confirmation."
+        ),
+        {
+            "customer_id": string_parameter("Customer ID."),
+            "appointment_id": string_parameter(
+                "Appointment ID to reschedule."
+            ),
+            "slot_id": string_parameter(
+                "New available slot ID selected by the customer."
+            ),
+            "confirmed": confirmation_parameter(),
+        },
+        ["customer_id", "appointment_id", "slot_id", "confirmed"],
+    ),
+
+    define_tool(
+        "create_support_ticket",
+        (
+            "Create a customer support ticket for an issue "
+            "that needs investigation or follow-up."
+        ),
+        {
+            "customer_id": string_parameter("Customer ID."),
+            "case_type": string_parameter(
+                "Issue category, such as billing or appointment."
+            ),
+            "description": string_parameter(
+                "Clear description of the customer's issue."
+            ),
+            "priority": {
+                "type": "string",
+                "enum": ["low", "medium", "high", "urgent"],
+                "description": "Ticket priority.",
             },
         },
-    },
+        ["customer_id", "case_type", "description"],
+    ),
 ]
 
 
@@ -226,6 +260,29 @@ def execute_tool(tool_name, arguments):
             confirmed=arguments["confirmed"],
         )
 
+    if tool_name == "cancel_appointment":
+        return cancel_appointment(
+            customer_id=arguments["customer_id"],
+            appointment_id=arguments["appointment_id"],
+            confirmed=arguments["confirmed"],
+        )
+
+    if tool_name == "reschedule_appointment":
+        return reschedule_appointment(
+            customer_id=arguments["customer_id"],
+            appointment_id=arguments["appointment_id"],
+            slot_id=arguments["slot_id"],
+            confirmed=arguments["confirmed"],
+        )
+
+    if tool_name == "create_support_ticket":
+        return create_support_ticket(
+            customer_id=arguments["customer_id"],
+            case_type=arguments["case_type"],
+            description=arguments["description"],
+            priority=arguments.get("priority", "medium"),
+        )
+
     return {
         "success": False,
         "message": f"Unknown tool: {tool_name}",
@@ -237,45 +294,105 @@ def execute_tool(tool_name, arguments):
 # ============================================================
 
 SYSTEM_PROMPT = """
-You are an AI customer support agent for
-Northstar Health Services.
+You are an AI customer support agent for Northstar Health Services.
 
 Use tools whenever customer data is required.
 Never invent customer information.
+You may use multiple tools to complete a request.
 
-You may use multiple tools when necessary.
+Your available tasks include:
+- Customer account lookup
+- Appointment lookup
+- Available appointment slot search
+- Billing transaction lookup
+- Duplicate-charge investigation
+- Document metadata lookup
+- Support case lookup
+- Refund requests
+- Appointment cancellation
+- Appointment rescheduling
+- Support ticket creation
 
-Refunds are sensitive actions.
+SENSITIVE ACTIONS
 
-Before issuing a refund:
-1. Investigate the problem.
-2. Identify the specific transaction.
-3. Tell the customer what will be refunded.
-4. Ask for explicit confirmation.
-5. Only after the customer explicitly confirms,
-   call issue_refund with confirmed=true.
+Refunds, appointment cancellations, and appointment
+rescheduling are sensitive actions.
 
-If the customer has not explicitly confirmed the
-specific refund, do not execute it.
+Before performing any sensitive action:
+1. Investigate the customer's request using read-only tools.
+2. Identify the specific transaction or appointment.
+3. Explain exactly what action will be performed.
+4. Ask the customer for explicit confirmation.
+5. Wait for the customer's confirmation.
+6. Only after confirmation, call the action tool
+   with confirmed=true.
+
+Do not interpret the initial request to perform an
+action as confirmation.
+
+If confirmation has not been received, do not execute
+the action.
+
+A confirmation must refer to the specific pending action.
+Do not reuse confirmation from an unrelated request.
+
+REFUND RULES
 
 When duplicate charges are detected, normally only
-ONE of the duplicate transactions should be refunded.
+one of the duplicate payments should be refunded.
 
-Do not refund all transactions in a duplicate group.
-One transaction represents the legitimate original
-payment and the other represents the duplicate.
+Check the resolution_status returned by
+check_duplicate_charge.
 
-After one duplicate transaction has been successfully
-refunded, consider the duplicate-charge issue resolved.
+If resolution_status is "resolved", explain that the
+duplicate-charge issue has already been resolved.
+
+Do not issue another duplicate-charge refund when
+the duplicate-charge issue is resolved.
+
+If resolution_status is "over_refunded", explain
+the discrepancy and recommend human investigation.
 
 Do not offer to refund the remaining legitimate
-transaction unless there is a separate valid reason
-for doing so.
+payment without a separate valid reason.
 
+APPOINTMENT RULES
+
+Before cancellation, retrieve the customer's
+appointments and identify the correct appointment.
+
+Before rescheduling:
+- Retrieve the customer's appointment.
+- Search available slots.
+- Ensure the proposed slot belongs to the same provider.
+- Explain the proposed date and time.
+- Request explicit confirmation.
+
+Do not invent appointment availability.
+
+SUPPORT TICKETS
+
+Create support tickets when the customer requests
+a ticket or when the customer agrees to escalation.
+
+Do not create unnecessary duplicate support tickets.
+
+Explain the ticket ID after successful creation.
+
+CONVERSATION
 
 Use previous conversation messages and tool results
-to understand follow-up responses such as:
-"yes", "confirm", or "refund T100".
+to understand follow-up responses.
+
+For example, "yes" may confirm a pending action,
+but only when the action and its details were clearly
+explained immediately beforehand.
+
+If information is missing, ask a clarifying question.
+
+Always report tool errors accurately.
+Never claim an action succeeded unless the tool
+confirms success.
 """
 
 
@@ -299,31 +416,35 @@ def run_agent(messages):
         tool_calls = assistant_message.get("tool_calls")
 
         if not tool_calls:
-            return assistant_message["content"]
+            return assistant_message.get("content", "")
 
         for tool_call in tool_calls:
 
             tool_name = tool_call["function"]["name"]
             arguments = tool_call["function"]["arguments"]
 
-            print(
-                f"\n[TOOL] {tool_name}"
-            )
+            if isinstance(arguments, str):
+                arguments = json.loads(arguments)
 
-            print(
-                "[ARGUMENTS]",
-                arguments
-            )
+            print(f"\n[TOOL] {tool_name}")
+            print("[ARGUMENTS]", arguments)
 
-            tool_result = execute_tool(
-                tool_name,
-                arguments
-            )
+            try:
+                tool_result = execute_tool(
+                    tool_name,
+                    arguments,
+                )
 
-            print(
-                "[RESULT]",
-                tool_result
-            )
+            except Exception as error:
+                tool_result = {
+                    "success": False,
+                    "message": (
+                        f"Tool execution failed: "
+                        f"{type(error).__name__}"
+                    ),
+                }
+
+            print("[RESULT]", tool_result)
 
             messages.append(
                 {
@@ -359,10 +480,7 @@ def main():
 
         user_message = input("You: ").strip()
 
-        if user_message.lower() in {
-            "exit",
-            "quit",
-        }:
+        if user_message.lower() in {"exit", "quit"}:
             print("\nAgent: Goodbye!")
             break
 
@@ -385,3 +503,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
