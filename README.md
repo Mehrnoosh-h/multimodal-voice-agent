@@ -1,16 +1,16 @@
-\# Multimodal Voice AI Customer Support Agent
+# Multimodal Voice AI Customer Support Agent
 
 
 
-\*\*An evolving agentic AI engineering portfolio project\*\* built with Python, Qwen3, Ollama, and SQLite.
+**An evolving agentic AI engineering portfolio project** built with Python, Qwen3, Ollama, and SQLite.
 
 
 
-> \*\*Status: In development.\*\* A working text-based agent can use database-backed tools, investigate duplicate charges, and handle conversational refund confirmation. Voice, multimodal input, and deployment features are planned.
+> **Status: In development.** A working text-based agent can use database-backed tools, investigate duplicate charges, and handle conversational refund confirmation. Voice, multimodal input, and deployment features are planned.
 
 
 
-\## Overview
+## Overview
 
 
 
@@ -18,15 +18,15 @@ This project explores how to build an AI customer support assistant that goes be
 
 
 
-The demonstration uses \*\*Northstar Health Services\*\*, a fictional healthcare service provider, and entirely synthetic customer data.
+The demonstration uses **Northstar Health Services**, a fictional healthcare service provider, and entirely synthetic customer data.
 
 
 
-\### Current capabilities
+### Current capabilities
 
 
 
-\- Local LLM inference using \*\*Qwen3:8b\*\* through \*\*Ollama\*\*
+\- Local LLM inference using **Qwen3:8b** through **Ollama**
 
 \- Multi-turn text conversation with message history
 
@@ -42,11 +42,11 @@ The demonstration uses \*\*Northstar Health Services\*\*, a fictional healthcare
 
 
 
-\*\*Important:\*\* This is a learning and portfolio system, not a production-ready healthcare or payments application. Backend authorization, transaction safeguards, and action validation still need strengthening.
+**Important:** This is a learning and portfolio system, not a production-ready healthcare or payments application. Backend authorization, transaction safeguards, and action validation still need strengthening.
 
 
 
-\## Technology stack
+## Technology stack
 
 
 
@@ -82,7 +82,7 @@ The demonstration uses \*\*Northstar Health Services\*\*, a fictional healthcare
 
 
 
-\## Current architecture
+## Current architecture
 
 
 
@@ -90,45 +90,45 @@ The demonstration uses \*\*Northstar Health Services\*\*, a fictional healthcare
 
 Customer (text input)
 
-&#x20;       |
+        |
 
-&#x20;       v
+        v
 
 Conversational agent (src/agent.py)
 
-&#x20;       |
+        |
 
-&#x20;       v
+        v
 
 Qwen3:8b via Ollama
 
-&#x20;       |
+        |
 
-&#x20;       v
+        v
 
 LLM selects a tool and provides arguments
 
-&#x20;       |
+        |
 
-&#x20;       v
+        v
 
 Python tool dispatcher (src/tools.py)
 
-&#x20;       |
+        |
 
-&#x20;       v
+        v
 
 SQLite customer-support database
 
-&#x20;       |
+        |
 
-&#x20;       v
+        v
 
 Tool result returned to the LLM
 
-&#x20;       |
+        |
 
-&#x20;       v
+        v
 
 Natural-language response to the customer
 
@@ -140,11 +140,11 @@ The agent may make multiple tool calls during one request. The current conversat
 
 
 
-\## Synthetic data
+## Synthetic data
 
 
 
-`src/generate\_data.py` creates a SQLite database with seven tables:
+`src/generate_data.py` creates a SQLite database with seven tables:
 
 
 
@@ -158,17 +158,17 @@ The agent may make multiple tool calls during one request. The current conversat
 
 | `appointments` | Scheduled and historical appointments |
 
-| `available\_slots` | Appointment availability |
+| `available_slots` | Appointment availability |
 
 | `transactions` | Payments, copays, and refunds |
 
 | `documents` | Metadata linking customers to documents |
 
-| `support\_cases` | Customer service requests |
+| `support_cases` | Customer service requests |
 
 
 
-The dataset includes deliberately constructed test cases, including a duplicate-payment scenario. `src/generate\_documents.py` creates \*\*30 synthetic PDFs\*\* for document-related experiments.
+The dataset includes deliberately constructed test cases, including a duplicate-payment scenario. `src/generate_documents.py` creates **30 synthetic PDFs** for document-related experiments.
 
 
 
@@ -176,7 +176,7 @@ Generated database files and PDFs are excluded from version control. They can be
 
 
 
-\## Backend tools
+## Backend tools
 
 
 
@@ -188,39 +188,39 @@ Eleven functions are implemented in `src/tools.py`:
 
 | --- | --- |
 
-| `get\_customer()` | Look up a customer |
+| `get_customer()` | Look up a customer |
 
-| `get\_appointments()` | List a customer's appointments |
+| `get_appointments()` | List a customer's appointments |
 
-| `search\_available\_slots()` | Find available appointment slots |
+| `search_available_slots()` | Find available appointment slots |
 
-| `get\_transactions()` | Retrieve payment history |
+| `get_transactions()` | Retrieve payment history |
 
-| `check\_duplicate\_charge()` | Identify possible duplicate payments and existing refunds |
+| `check_duplicate_charge()` | Identify possible duplicate payments and existing refunds |
 
-| `get\_documents()` | Retrieve document metadata and file availability |
+| `get_documents()` | Retrieve document metadata and file availability |
 
-| `get\_support\_cases()` | List support cases |
+| `get_support_cases()` | List support cases |
 
-| `cancel\_appointment()` | Cancel an appointment, subject to confirmation |
+| `cancel_appointment()` | Cancel an appointment, subject to confirmation |
 
-| `reschedule\_appointment()` | Change an appointment, subject to confirmation |
+| `reschedule_appointment()` | Change an appointment, subject to confirmation |
 
-| `issue\_refund()` | Create a refund transaction, subject to confirmation |
+| `issue_refund()` | Create a refund transaction, subject to confirmation |
 
-| `create\_support\_ticket()` | Open a support case |
-
-
-
-\*\*Agent integration:\*\* Eight tools are currently exposed to the conversational agent. Appointment cancellation, rescheduling, and support-ticket creation are implemented in the backend but have not yet been connected to the agent.
+| `create_support_ticket()` | Open a support case |
 
 
 
-\### Example: duplicate-charge investigation
+**Agent integration:** Eight tools are currently exposed to the conversational agent. Appointment cancellation, rescheduling, and support-ticket creation are implemented in the backend but have not yet been connected to the agent.
 
 
 
-\*\*Customer:\*\*
+### Example: duplicate-charge investigation
+
+
+
+**Customer:**
 
 
 
@@ -228,11 +228,11 @@ Eleven functions are implemented in `src/tools.py`:
 
 
 
-\*\*Agent workflow:\*\*
+**Agent workflow:**
 
 
 
-1\. Selects `check\_duplicate\_charge()`.
+1\. Selects `check_duplicate_charge()`.
 
 2\. Queries the synthetic SQLite database.
 
@@ -240,7 +240,7 @@ Eleven functions are implemented in `src/tools.py`:
 
 4\. Finds one completed refund of $125.
 
-5\. Receives `resolution\_status: resolved` from the backend.
+5\. Receives `resolution_status: resolved` from the backend.
 
 6\. Explains that the duplicate-charge issue has already been resolved without attempting another refund.
 
@@ -250,7 +250,7 @@ This is a controlled demonstration scenario. Matching payments by appointment an
 
 
 
-\## Repository structure
+## Repository structure
 
 
 
@@ -264,31 +264,31 @@ multimodal-voice-agent/
 
 |-- data/
 
-|   |-- customer\_support.db       # Generated locally; not tracked
+|   |-- customer_support.db       # Generated locally; not tracked
 
 |   `-- documents/               # Generated locally; not tracked
 
 `-- src/
 
-&#x20;   |-- agent.py                 # Conversational agent
+    |-- agent.py                 # Conversational agent
 
-&#x20;   |-- generate\_data.py         # Synthetic SQLite data
+    |-- generate_data.py         # Synthetic SQLite data
 
-&#x20;   |-- generate\_documents.py    # Synthetic PDFs
+    |-- generate_documents.py    # Synthetic PDFs
 
-&#x20;   |-- test\_tools.py            # Backend tool tests
+    |-- test_tools.py            # Backend tool tests
 
-&#x20;   `-- tools.py                 # Database-backed tools
+    `-- tools.py                 # Database-backed tools
 
 ```
 
 
 
-\## Run locally
+## Run locally
 
 
 
-\### Prerequisites
+### Prerequisites
 
 
 
@@ -330,7 +330,7 @@ Generate the SQLite database:
 
 ```bash
 
-python src/generate\_data.py
+python src/generate_data.py
 
 ```
 
@@ -342,7 +342,7 @@ Generate synthetic PDFs:
 
 ```bash
 
-python src/generate\_documents.py
+python src/generate_documents.py
 
 ```
 
@@ -360,15 +360,15 @@ python src/agent.py
 
 
 
-\*\*Note:\*\* The database must be generated before running the agent. The test script may create new support cases, so run it against disposable synthetic data.
+**Note:** The database must be generated before running the agent. The test script may create new support cases, so run it against disposable synthetic data.
 
 
 
-\## Development roadmap
+## Development roadmap
 
 
 
-\### Completed
+### Completed
 
 
 
@@ -392,7 +392,7 @@ python src/agent.py
 
 
 
-\### Next: finish the text agent
+### Next: finish the text agent
 
 
 
@@ -408,7 +408,7 @@ python src/agent.py
 
 
 
-\### Planned: voice and multimodal AI
+### Planned: voice and multimodal AI
 
 
 
@@ -424,7 +424,7 @@ python src/agent.py
 
 
 
-\### Planned: production-oriented engineering
+### Planned: production-oriented engineering
 
 
 
@@ -444,11 +444,11 @@ python src/agent.py
 
 
 
-\## Safety and limitations
+## Safety and limitations
 
 
 
-\- All customer and transaction records are \*\*synthetic\*\*.
+\- All customer and transaction records are **synthetic**.
 
 \- The agent currently relies on a customer ID supplied in conversation; real authentication and authorization have not been implemented.
 
@@ -456,11 +456,11 @@ python src/agent.py
 
 \- Refund and appointment tools are demonstrations and should not be connected to real payment or scheduling systems without further validation, auditability, and security controls.
 
-\- Voice, multimodal understanding, RAG, MCP, API serving, and deployment are \*\*not yet implemented\*\*.
+\- Voice, multimodal understanding, RAG, MCP, API serving, and deployment are **not yet implemented**.
 
 
 
-\## Project updates
+## Project updates
 
 
 
