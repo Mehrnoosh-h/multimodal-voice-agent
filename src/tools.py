@@ -1,15 +1,37 @@
+
 import sqlite3
 from pathlib import Path
+from datetime import datetime
 
 
 DB_PATH = "data/customer_support.db"
 
 
 def get_connection():
-    """Create and return a SQLite database connection."""
+    """Create a SQLite database connection."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def error(message, **extra):
+    return {
+        "success": False,
+        "message": message,
+        **extra,
+    }
+
+
+def is_future_appointment(date_value, time_value):
+    """Return True only for a future appointment."""
+    try:
+        appointment_datetime = datetime.strptime(
+            f"{date_value} {time_value}",
+            "%Y-%m-%d %H:%M",
+        )
+        return appointment_datetime > datetime.now()
+    except (ValueError, TypeError):
+        return False
 
 
 # ============================================================
@@ -30,14 +52,11 @@ def get_customer(customer_id):
     conn.close()
 
     if customer is None:
-        return {
-            "success": False,
-            "message": "Customer not found."
-        }
+        return error("Customer not found.")
 
     return {
         "success": True,
-        "customer": dict(customer)
+        "customer": dict(customer),
     }
 
 
@@ -80,7 +99,7 @@ def get_appointments(customer_id):
         "success": True,
         "customer_id": customer_id,
         "count": len(appointments),
-        "appointments": appointments
+        "appointments": appointments,
     }
 
 
@@ -91,7 +110,7 @@ def get_appointments(customer_id):
 def search_available_slots(
     provider_id=None,
     start_date=None,
-    end_date=None
+    end_date=None,
 ):
     conn = get_connection()
     cursor = conn.cursor()
@@ -142,10 +161,19 @@ def search_available_slots(
 
     conn.close()
 
+    # Return only future slots.
+    future_slots = [
+        slot for slot in slots
+        if is_future_appointment(
+            slot["slot_date"],
+            slot["slot_time"],
+        )
+    ]
+
     return {
         "success": True,
-        "count": len(slots),
-        "slots": slots
+        "count": len(future_slots),
+        "slots": future_slots,
     }
 
 
@@ -184,7 +212,7 @@ def get_transactions(customer_id):
         "success": True,
         "customer_id": customer_id,
         "count": len(transactions),
-        "transactions": transactions
+        "transactions": transactions,
     }
 
 
@@ -194,14 +222,17 @@ def get_transactions(customer_id):
 
 def check_duplicate_charge(customer_id):
     """
-    Detect duplicate completed payments and determine whether
-    the duplicate-charge problem has already been resolved by refunds.
+    Detect duplicate completed payments and determine
+    whether the duplicate-charge issue is resolved.
     """
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT appointment_id, amount, COUNT(*) AS duplicate_count
+        SELECT
+            appointment_id,
+            amount,
+            COUNT(*) AS duplicate_count
         FROM transactions
         WHERE customer_id = ?
           AND status = 'completed'
@@ -232,9 +263,14 @@ def check_duplicate_charge(customer_id):
 
         payment_rows = cursor.fetchall()
         payments = [dict(row) for row in payment_rows]
-        payment_ids = [row["transaction_id"] for row in payment_rows]
+
+        payment_ids = [
+            row["transaction_id"]
+            for row in payment_rows
+        ]
 
         refunds = []
+
         for payment_id in payment_ids:
             cursor.execute("""
                 SELECT *
@@ -243,8 +279,15 @@ def check_duplicate_charge(customer_id):
                   AND transaction_type = 'refund'
                   AND status = 'completed'
                   AND reference_id = ?
-            """, (customer_id, f"REFUND_FOR_{payment_id}"))
-            refunds.extend(dict(row) for row in cursor.fetchall())
+            """, (
+                customer_id,
+                f"REFUND_FOR_{payment_id}",
+            ))
+
+            refunds.extend(
+                dict(row)
+                for row in cursor.fetchall()
+            )
 
         refund_count = len(refunds)
         expected_refunds = duplicate_count - 1
@@ -266,7 +309,7 @@ def check_duplicate_charge(customer_id):
             "refund_count": refund_count,
             "resolution_status": resolution_status,
             "transactions": payments,
-            "refunds": refunds
+            "refunds": refunds,
         })
 
     conn.close()
@@ -275,7 +318,7 @@ def check_duplicate_charge(customer_id):
         "success": True,
         "customer_id": customer_id,
         "duplicate_found": len(results) > 0,
-        "duplicate_groups": results
+        "duplicate_groups": results,
     }
 
 
@@ -317,7 +360,7 @@ def get_documents(customer_id):
         "success": True,
         "customer_id": customer_id,
         "count": len(documents),
-        "documents": documents
+        "documents": documents,
     }
 
 
@@ -354,7 +397,7 @@ def get_support_cases(customer_id):
         "success": True,
         "customer_id": customer_id,
         "count": len(cases),
-        "support_cases": cases
+        "support_cases": cases,
     }
 
 
@@ -365,73 +408,88 @@ def get_support_cases(customer_id):
 def cancel_appointment(
     customer_id,
     appointment_id,
-    confirmed=False
+    confirmed=False,
 ):
     if not confirmed:
-        return {
-            "success": False,
-            "requires_confirmation": True,
-            "message":
-                "Customer confirmation is required "
-                "before cancelling an appointment."
-        }
+        return error(
+            "Customer confirmation is required "
+            "before cancelling an appointment.",
+            requires_confirmation=True,
+        )
 
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT
-            appointment_id,
-            customer_id,
-            status
-        FROM appointments
-        WHERE appointment_id = ?
-    """, (appointment_id,))
+    try:
+        cursor = conn.cursor()
 
-    appointment = cursor.fetchone()
+        cursor.execute("""
+            SELECT
+                appointment_id,
+                customer_id,
+                appointment_date,
+                appointment_time,
+                status
+            FROM appointments
+            WHERE appointment_id = ?
+        """, (appointment_id,))
 
-    if appointment is None:
-        conn.close()
+        appointment = cursor.fetchone()
+
+        if appointment is None:
+            return error("Appointment not found.")
+
+        if appointment["customer_id"] != customer_id:
+            return error(
+                "Appointment does not belong to this customer."
+            )
+
+        # Safety: Only scheduled appointments can be cancelled.
+        if appointment["status"] != "scheduled":
+            return error(
+                "Cannot cancel this appointment because "
+                f"its status is '{appointment['status']}'. "
+                "Only scheduled appointments can be cancelled."
+            )
+
+        # Safety: Prevent cancellation of past appointments.
+        if not is_future_appointment(
+            appointment["appointment_date"],
+            appointment["appointment_time"],
+        ):
+            return error(
+                "Cannot cancel an appointment in the past."
+            )
+
+        cursor.execute("""
+            UPDATE appointments
+            SET status = 'cancelled',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE appointment_id = ?
+              AND customer_id = ?
+              AND status = 'scheduled'
+        """, (appointment_id, customer_id))
+
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return error(
+                "Appointment could not be cancelled."
+            )
+
+        conn.commit()
 
         return {
-            "success": False,
-            "message": "Appointment not found."
+            "success": True,
+            "appointment_id": appointment_id,
+            "status": "cancelled",
+            "message": "Appointment cancelled successfully.",
         }
 
-    if appointment["customer_id"] != customer_id:
+    except Exception:
+        conn.rollback()
+        raise
+
+    finally:
         conn.close()
-
-        return {
-            "success": False,
-            "message":
-                "Appointment does not belong "
-                "to this customer."
-        }
-
-    if appointment["status"] == "cancelled":
-        conn.close()
-
-        return {
-            "success": False,
-            "message":
-                "Appointment is already cancelled."
-        }
-
-    cursor.execute("""
-        UPDATE appointments
-        SET status = 'cancelled',
-            updated_at = CURRENT_TIMESTAMP
-        WHERE appointment_id = ?
-    """, (appointment_id,))
-
-    conn.commit()
-    conn.close()
-
-    return {
-        "success": True,
-        "appointment_id": appointment_id,
-        "status": "cancelled"
-    }
 
 
 # ============================================================
@@ -442,103 +500,150 @@ def reschedule_appointment(
     customer_id,
     appointment_id,
     slot_id,
-    confirmed=False
+    confirmed=False,
 ):
     if not confirmed:
-        return {
-            "success": False,
-            "requires_confirmation": True,
-            "message":
-                "Customer confirmation is required "
-                "before rescheduling an appointment."
-        }
+        return error(
+            "Customer confirmation is required "
+            "before rescheduling an appointment.",
+            requires_confirmation=True,
+        )
 
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT *
-        FROM appointments
-        WHERE appointment_id = ?
-    """, (appointment_id,))
+    try:
+        cursor = conn.cursor()
 
-    appointment = cursor.fetchone()
+        cursor.execute("""
+            SELECT *
+            FROM appointments
+            WHERE appointment_id = ?
+        """, (appointment_id,))
 
-    if appointment is None:
-        conn.close()
+        appointment = cursor.fetchone()
 
-        return {
-            "success": False,
-            "message": "Appointment not found."
-        }
+        if appointment is None:
+            return error("Appointment not found.")
 
-    if appointment["customer_id"] != customer_id:
-        conn.close()
+        if appointment["customer_id"] != customer_id:
+            return error(
+                "Appointment does not belong to this customer."
+            )
 
-        return {
-            "success": False,
-            "message":
-                "Appointment does not belong "
-                "to this customer."
-        }
+        # Safety: Completed/cancelled appointments are immutable.
+        if appointment["status"] != "scheduled":
+            return error(
+                "Cannot reschedule this appointment because "
+                f"its status is '{appointment['status']}'. "
+                "Only scheduled appointments can be rescheduled."
+            )
 
-    cursor.execute("""
-        SELECT *
-        FROM available_slots
-        WHERE slot_id = ?
-        AND available = 1
-    """, (slot_id,))
+        # Safety: Original appointment must be in the future.
+        if not is_future_appointment(
+            appointment["appointment_date"],
+            appointment["appointment_time"],
+        ):
+            return error(
+                "Cannot reschedule an appointment in the past."
+            )
 
-    slot = cursor.fetchone()
+        cursor.execute("""
+            SELECT *
+            FROM available_slots
+            WHERE slot_id = ?
+              AND available = 1
+        """, (slot_id,))
 
-    if slot is None:
-        conn.close()
+        slot = cursor.fetchone()
 
-        return {
-            "success": False,
-            "message":
+        if slot is None:
+            return error(
                 "The requested slot is not available."
-        }
+            )
 
-    if slot["provider_id"] != appointment["provider_id"]:
-        conn.close()
+        if slot["provider_id"] != appointment["provider_id"]:
+            return error(
+                "The selected slot belongs to a different provider."
+            )
+
+        # Safety: New appointment must also be in the future.
+        if not is_future_appointment(
+            slot["slot_date"],
+            slot["slot_time"],
+        ):
+            return error(
+                "Cannot reschedule to a past appointment slot."
+            )
+
+        # Reserve the new slot.
+        cursor.execute("""
+            UPDATE available_slots
+            SET available = 0
+            WHERE slot_id = ?
+              AND available = 1
+        """, (slot_id,))
+
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return error(
+                "The selected slot is no longer available."
+            )
+
+        cursor.execute("""
+            UPDATE appointments
+            SET appointment_date = ?,
+                appointment_time = ?,
+                status = 'scheduled',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE appointment_id = ?
+              AND customer_id = ?
+              AND status = 'scheduled'
+        """, (
+            slot["slot_date"],
+            slot["slot_time"],
+            appointment_id,
+            customer_id,
+        ))
+
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return error(
+                "Appointment could not be rescheduled."
+            )
+
+        # Restore the old slot if it exists in available_slots.
+        cursor.execute("""
+            UPDATE available_slots
+            SET available = 1
+            WHERE provider_id = ?
+              AND slot_date = ?
+              AND slot_time = ?
+              AND available = 0
+              AND slot_id != ?
+        """, (
+            appointment["provider_id"],
+            appointment["appointment_date"],
+            appointment["appointment_time"],
+            slot_id,
+        ))
+
+        conn.commit()
 
         return {
-            "success": False,
-            "message":
-                "The selected slot belongs to "
-                "a different provider."
+            "success": True,
+            "appointment_id": appointment_id,
+            "new_date": slot["slot_date"],
+            "new_time": slot["slot_time"],
+            "slot_id": slot_id,
+            "message": "Appointment rescheduled successfully.",
         }
 
-    cursor.execute("""
-        UPDATE appointments
-        SET appointment_date = ?,
-            appointment_time = ?,
-            status = 'scheduled',
-            updated_at = CURRENT_TIMESTAMP
-        WHERE appointment_id = ?
-    """, (
-        slot["slot_date"],
-        slot["slot_time"],
-        appointment_id
-    ))
+    except Exception:
+        conn.rollback()
+        raise
 
-    cursor.execute("""
-        UPDATE available_slots
-        SET available = 0
-        WHERE slot_id = ?
-    """, (slot_id,))
-
-    conn.commit()
-    conn.close()
-
-    return {
-        "success": True,
-        "appointment_id": appointment_id,
-        "new_date": slot["slot_date"],
-        "new_time": slot["slot_time"],
-        "slot_id": slot_id
-    }
+    finally:
+        conn.close()
 
 
 # ============================================================
@@ -548,157 +653,182 @@ def reschedule_appointment(
 def issue_refund(
     customer_id,
     transaction_id,
-    confirmed=False
+    confirmed=False,
 ):
     """
     Issue a refund for a completed payment or copay.
 
-    This is a sensitive action and requires explicit
-    customer confirmation.
+    Requires confirmation. Duplicate-charge groups
+    cannot be refunded beyond their expected refund count.
     """
-
     if not confirmed:
-        return {
-            "success": False,
-            "requires_confirmation": True,
-            "message":
-                "Customer confirmation is required "
-                "before issuing a refund."
-        }
+        return error(
+            "Customer confirmation is required "
+            "before issuing a refund.",
+            requires_confirmation=True,
+        )
 
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT *
-        FROM transactions
-        WHERE transaction_id = ?
-    """, (transaction_id,))
+    try:
+        cursor = conn.cursor()
 
-    transaction = cursor.fetchone()
+        cursor.execute("""
+            SELECT *
+            FROM transactions
+            WHERE transaction_id = ?
+        """, (transaction_id,))
 
-    if transaction is None:
-        conn.close()
+        transaction = cursor.fetchone()
 
-        return {
-            "success": False,
-            "message": "Transaction not found."
-        }
+        if transaction is None:
+            return error("Transaction not found.")
 
-    if transaction["customer_id"] != customer_id:
-        conn.close()
+        if transaction["customer_id"] != customer_id:
+            return error(
+                "Transaction does not belong to this customer."
+            )
 
-        return {
-            "success": False,
-            "message":
-                "Transaction does not belong "
-                "to this customer."
-        }
+        if transaction["status"] != "completed":
+            return error(
+                "Only completed transactions can be refunded."
+            )
 
-    if transaction["status"] != "completed":
-        conn.close()
+        if transaction["transaction_type"] not in (
+            "payment",
+            "copay",
+        ):
+            return error(
+                "This transaction type cannot be refunded."
+            )
 
-        return {
-            "success": False,
-            "message":
-                "Only completed transactions "
-                "can be refunded."
-        }
+        refund_reference = f"REFUND_FOR_{transaction_id}"
 
-    if transaction["transaction_type"] not in (
-        "payment",
-        "copay"
-    ):
-        conn.close()
+        # Safety: Prevent refunding the same payment twice.
+        cursor.execute("""
+            SELECT transaction_id
+            FROM transactions
+            WHERE reference_id = ?
+              AND transaction_type = 'refund'
+              AND status = 'completed'
+        """, (refund_reference,))
 
-        return {
-            "success": False,
-            "message":
-                "This transaction type "
-                "cannot be refunded."
-        }
-
-    # Prevent duplicate refunds.
-    refund_reference = f"REFUND_FOR_{transaction_id}"
-
-    cursor.execute("""
-        SELECT transaction_id
-        FROM transactions
-        WHERE reference_id = ?
-    """, (refund_reference,))
-
-    existing_refund = cursor.fetchone()
-
-    if existing_refund is not None:
-        conn.close()
-
-        return {
-            "success": False,
-            "message":
+        if cursor.fetchone() is not None:
+            return error(
                 "A refund has already been issued "
                 "for this transaction."
+            )
+
+        # Safety: Detect whether this payment is in a
+        # duplicate-charge group.
+        cursor.execute("""
+            SELECT transaction_id
+            FROM transactions
+            WHERE customer_id = ?
+              AND appointment_id = ?
+              AND amount = ?
+              AND status = 'completed'
+              AND transaction_type IN ('payment', 'copay')
+        """, (
+            customer_id,
+            transaction["appointment_id"],
+            transaction["amount"],
+        ))
+
+        duplicate_payments = [
+            row["transaction_id"]
+            for row in cursor.fetchall()
+        ]
+
+        if len(duplicate_payments) > 1:
+            # Count completed refunds across the whole group.
+            refund_references = [
+                f"REFUND_FOR_{payment_id}"
+                for payment_id in duplicate_payments
+            ]
+
+            placeholders = ",".join(
+                "?" for _ in refund_references
+            )
+
+            cursor.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM transactions
+                WHERE customer_id = ?
+                  AND transaction_type = 'refund'
+                  AND status = 'completed'
+                  AND reference_id IN ({placeholders})
+                """,
+                [customer_id] + refund_references,
+            )
+
+            existing_refund_count = cursor.fetchone()[0]
+            allowed_refunds = len(duplicate_payments) - 1
+
+            if existing_refund_count >= allowed_refunds:
+                return error(
+                    "This duplicate-charge group has already "
+                    "received the maximum number of refunds. "
+                    "The remaining payment must not be refunded "
+                    "automatically."
+                )
+
+        # Generate the next transaction ID.
+        cursor.execute("""
+            SELECT MAX(
+                CAST(SUBSTR(transaction_id, 2) AS INTEGER)
+            )
+            FROM transactions
+        """)
+
+        max_id = cursor.fetchone()[0] or 0
+        new_transaction_id = f"T{max_id + 1:03d}"
+
+        cursor.execute("""
+            INSERT INTO transactions (
+                transaction_id,
+                customer_id,
+                appointment_id,
+                transaction_date,
+                amount,
+                transaction_type,
+                description,
+                payment_method,
+                status,
+                reference_id
+            )
+            VALUES (
+                ?, ?, ?, CURRENT_TIMESTAMP, ?,
+                'refund', ?, ?, 'completed', ?
+            )
+        """, (
+            new_transaction_id,
+            customer_id,
+            transaction["appointment_id"],
+            -abs(transaction["amount"]),
+            f"Refund for {transaction_id}",
+            transaction["payment_method"],
+            refund_reference,
+        ))
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "refund_transaction_id": new_transaction_id,
+            "original_transaction_id": transaction_id,
+            "refund_amount": abs(transaction["amount"]),
+            "message": "Refund issued successfully.",
         }
 
-    # Generate the next transaction ID.
-    cursor.execute("""
-        SELECT MAX(
-            CAST(
-                SUBSTR(transaction_id, 2)
-                AS INTEGER
-            )
-        )
-        FROM transactions
-    """)
+    except Exception:
+        conn.rollback()
+        raise
 
-    max_id = cursor.fetchone()[0] or 0
-    new_transaction_id = f"T{max_id + 1:03d}"
+    finally:
+        conn.close()
 
-    # Create refund transaction.
-    cursor.execute("""
-        INSERT INTO transactions (
-            transaction_id,
-            customer_id,
-            appointment_id,
-            transaction_date,
-            amount,
-            transaction_type,
-            description,
-            payment_method,
-            status,
-            reference_id
-        )
-        VALUES (
-            ?,
-            ?,
-            ?,
-            CURRENT_TIMESTAMP,
-            ?,
-            'refund',
-            ?,
-            ?,
-            'completed',
-            ?
-        )
-    """, (
-        new_transaction_id,
-        customer_id,
-        transaction["appointment_id"],
-        -abs(transaction["amount"]),
-        f"Refund for {transaction_id}",
-        transaction["payment_method"],
-        refund_reference
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return {
-        "success": True,
-        "refund_transaction_id": new_transaction_id,
-        "original_transaction_id": transaction_id,
-        "refund_amount": abs(transaction["amount"]),
-        "message": "Refund issued successfully."
-    }
 
 # ============================================================
 # TOOL 11: CREATE SUPPORT TICKET
@@ -708,111 +838,94 @@ def create_support_ticket(
     customer_id,
     case_type,
     description,
-    priority="medium"
+    priority="medium",
 ):
     """
-    Create a new support case when the AI agent cannot
-    fully resolve a customer's issue.
+    Create a support case requiring investigation
+    or follow-up.
     """
-
     conn = get_connection()
-    cursor = conn.cursor()
 
-    # Verify that the customer exists.
-    cursor.execute("""
-        SELECT customer_id
-        FROM customers
-        WHERE customer_id = ?
-    """, (customer_id,))
+    try:
+        cursor = conn.cursor()
 
-    customer = cursor.fetchone()
+        cursor.execute("""
+            SELECT customer_id
+            FROM customers
+            WHERE customer_id = ?
+        """, (customer_id,))
 
-    if customer is None:
-        conn.close()
+        if cursor.fetchone() is None:
+            return error("Customer not found.")
 
-        return {
-            "success": False,
-            "message": "Customer not found."
+        valid_priorities = {
+            "low",
+            "medium",
+            "high",
+            "urgent",
         }
 
-    # Validate priority.
-    valid_priorities = {
-        "low",
-        "medium",
-        "high",
-        "urgent"
-    }
+        priority = priority.lower()
 
-    priority = priority.lower()
-
-    if priority not in valid_priorities:
-        conn.close()
-
-        return {
-            "success": False,
-            "message":
+        if priority not in valid_priorities:
+            return error(
                 "Priority must be low, medium, high, or urgent."
-        }
-
-    # Generate the next case ID.
-    cursor.execute("""
-        SELECT MAX(
-            CAST(
-                SUBSTR(case_id, 5)
-                AS INTEGER
             )
-        )
-        FROM support_cases
-    """)
 
-    max_id = cursor.fetchone()[0] or 0
-    new_case_id = f"CASE{max_id + 1:03d}"
+        cursor.execute("""
+            SELECT MAX(
+                CAST(SUBSTR(case_id, 5) AS INTEGER)
+            )
+            FROM support_cases
+        """)
 
-    # Create the support case.
-    cursor.execute("""
-        INSERT INTO support_cases (
-            case_id,
+        max_id = cursor.fetchone()[0] or 0
+        new_case_id = f"CASE{max_id + 1:03d}"
+
+        cursor.execute("""
+            INSERT INTO support_cases (
+                case_id,
+                customer_id,
+                case_type,
+                description,
+                priority,
+                status,
+                created_at,
+                resolved_at
+            )
+            VALUES (
+                ?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP, NULL
+            )
+        """, (
+            new_case_id,
             customer_id,
             case_type,
             description,
             priority,
-            status,
-            created_at,
-            resolved_at
-        )
-        VALUES (
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            'open',
-            CURRENT_TIMESTAMP,
-            NULL
-        )
-    """, (
-        new_case_id,
-        customer_id,
-        case_type,
-        description,
-        priority
-    ))
+        ))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
 
-    return {
-        "success": True,
-        "case_id": new_case_id,
-        "customer_id": customer_id,
-        "case_type": case_type,
-        "priority": priority,
-        "status": "open",
-        "message": "Support ticket created successfully."
-    }
+        return {
+            "success": True,
+            "case_id": new_case_id,
+            "customer_id": customer_id,
+            "case_type": case_type,
+            "priority": priority,
+            "status": "open",
+            "message": "Support ticket created successfully.",
+        }
+
+    except Exception:
+        conn.rollback()
+        raise
+
+    finally:
+        conn.close()
+
 
 # ============================================================
-# SIMPLE TESTS
+# SIMPLE READ-ONLY TESTS
 # ============================================================
 
 if __name__ == "__main__":
@@ -829,11 +942,11 @@ if __name__ == "__main__":
     print("\n--- Document Test ---")
     print(get_documents("C021"))
 
-    print("\n--- Refund Safety Test ---")
+    print("\n--- Refund Confirmation Test ---")
     print(
         issue_refund(
             customer_id="C021",
             transaction_id="T100",
-            confirmed=False
+            confirmed=False,
         )
     )
