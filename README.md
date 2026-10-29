@@ -1,262 +1,256 @@
-
-
 \# Multimodal Voice AI Customer Support Agent
 
 
 
-An agentic AI customer support system built with Python, Ollama, Qwen3, and SQLite.
+\*\*An evolving agentic AI engineering portfolio project\*\* built with Python, Qwen3, Ollama, and SQLite.
 
 
 
-The project is being developed incrementally to demonstrate AI agents, LLM tool calling, multi-step workflows, human-in-the-loop approval, voice AI, multimodal document understanding, and production-oriented AI engineering.
+> \*\*Status: In development.\*\* A working text-based agent can use database-backed tools, investigate duplicate charges, and handle conversational refund confirmation. Voice, multimodal input, and deployment features are planned.
 
 
 
-> \*\*Project status:\*\* In active development. The text-based AI agent and core database tools are implemented. Voice and multimodal capabilities are planned.
+\## Overview
 
 
 
-\## Project Overview
+This project explores how to build an AI customer support assistant that goes beyond answering questions. The agent interprets natural-language requests, selects tools, retrieves structured information, and can carry out approved actions.
 
 
 
-The goal is to build an AI customer support agent that can:
+The demonstration uses \*\*Northstar Health Services\*\*, a fictional healthcare service provider, and entirely synthetic customer data.
 
 
 
-\- Understand customer requests in natural language
-
-\- Retrieve information from a structured database
-
-\- Select and execute Python tools
-
-\- Investigate billing and appointment issues
-
-\- Handle multi-turn conversations
-
-\- Request confirmation before sensitive actions
-
-\- Eventually process voice, images, and PDFs
+\### Current capabilities
 
 
 
-The system uses a local LLM rather than relying on a paid cloud LLM API.
+\- Local LLM inference using \*\*Qwen3:8b\*\* through \*\*Ollama\*\*
+
+\- Multi-turn text conversation with message history
+
+\- LLM-directed Python tool calls and multi-step tool execution
+
+\- SQLite-backed customer, appointment, transaction, and support-case lookups
+
+\- Duplicate-charge detection with refund-resolution status
+
+\- Refund tool with explicit confirmation handling
+
+\- Synthetic dataset and PDF generation scripts
 
 
 
-\## Technology Stack
+\*\*Important:\*\* This is a learning and portfolio system, not a production-ready healthcare or payments application. Backend authorization, transaction safeguards, and action validation still need strengthening.
 
 
 
-| Component | Technology |
-
-|---|---|
-
-| Programming language | Python 3.11 |
-
-| Large language model | Qwen3:8b |
-
-| Local LLM runtime | Ollama |
-
-| Database | SQLite |
-
-| Synthetic data generation | Faker |
-
-| PDF generation | ReportLab |
-
-| Version control | Git and GitHub |
+\## Technology stack
 
 
 
-\*\*Planned technologies:\*\* Speech-to-Text, Text-to-Speech, FastAPI, RAG, MCP, Docker, and observability tools.
+| Area | Technology | Status |
+
+| --- | --- | --- |
+
+| Language | Python 3.11 | Implemented |
+
+| LLM | Qwen3:8b | Implemented |
+
+| Local inference | Ollama | Implemented |
+
+| Database | SQLite | Implemented |
+
+| Synthetic data | Faker | Implemented |
+
+| PDF generation | ReportLab | Implemented |
+
+| Source control | Git and GitHub | Implemented |
+
+| Speech-to-Text / Text-to-Speech | To be selected | Planned |
+
+| API | FastAPI | Planned |
+
+| Retrieval | RAG for support policies | Planned |
+
+| Tool interoperability | Model Context Protocol (MCP) | Planned |
+
+| Containerization | Docker | Planned |
+
+| Observability and evaluation | To be selected | Planned |
 
 
 
-\## Current Architecture
+\## Current architecture
 
 
 
 ```text
 
-Customer (Text)
+Customer (text input)
 
-&#x20;     |
+&#x20;       |
 
-&#x20;     v
+&#x20;       v
 
-Python Conversational Agent
+Conversational agent (src/agent.py)
 
-&#x20;     |
+&#x20;       |
 
-&#x20;     v
+&#x20;       v
 
 Qwen3:8b via Ollama
 
-&#x20;     |
+&#x20;       |
 
-&#x20;     v
+&#x20;       v
 
-Tool Selection and Execution
+LLM selects a tool and provides arguments
 
-&#x20;     |
+&#x20;       |
 
-&#x20;     v
+&#x20;       v
 
-Python Backend Tools
+Python tool dispatcher (src/tools.py)
 
-&#x20;     |
+&#x20;       |
 
-&#x20;     v
+&#x20;       v
 
-SQLite Customer Support Database
+SQLite customer-support database
 
-&#x20;     |
+&#x20;       |
 
-&#x20;     v
+&#x20;       v
 
-Tool Results -> LLM -> Customer Response
+Tool result returned to the LLM
+
+&#x20;       |
+
+&#x20;       v
+
+Natural-language response to the customer
 
 ```
 
 
 
-\## Synthetic Dataset
+The agent may make multiple tool calls during one request. The current conversation loop retains previous messages within a running session.
 
 
 
-The project uses synthetic customer support data for a fictional healthcare service provider, Northstar Health Services.
+\## Synthetic data
 
 
 
-Seven SQLite tables are generated:
+`src/generate\_data.py` creates a SQLite database with seven tables:
 
 
 
-1\. `customers`
+| Table | Purpose |
 
-2\. `providers`
+| --- | --- |
 
-3\. `appointments`
+| `customers` | Customer profiles and account status |
 
-4\. `available\_slots`
+| `providers` | Healthcare provider information |
 
-5\. `transactions`
+| `appointments` | Scheduled and historical appointments |
 
-6\. `documents`
+| `available\_slots` | Appointment availability |
 
-7\. `support\_cases`
+| `transactions` | Payments, copays, and refunds |
 
+| `documents` | Metadata linking customers to documents |
 
-
-The dataset includes controlled scenarios such as duplicate charges, appointment cancellations, and support requests.
-
-
-
-Thirty synthetic PDF documents are also generated.
+| `support\_cases` | Customer service requests |
 
 
 
-Generated database and PDF files are excluded from Git version control.
+The dataset includes deliberately constructed test cases, including a duplicate-payment scenario. `src/generate\_documents.py` creates \*\*30 synthetic PDFs\*\* for document-related experiments.
 
 
 
-\## Implemented Backend Tools
+Generated database files and PDFs are excluded from version control. They can be recreated locally using the scripts below.
 
 
 
-The following Python functions are implemented in `src/tools.py`:
+\## Backend tools
 
 
 
-| Function | Purpose |
+Eleven functions are implemented in `src/tools.py`:
 
-|---|---|
 
-| `get\_customer()` | Retrieve customer information |
 
-| `get\_appointments()` | Retrieve appointments |
+| Tool | Function |
+
+| --- | --- |
+
+| `get\_customer()` | Look up a customer |
+
+| `get\_appointments()` | List a customer's appointments |
 
 | `search\_available\_slots()` | Find available appointment slots |
 
-| `get\_transactions()` | Retrieve transaction history |
+| `get\_transactions()` | Retrieve payment history |
 
-| `check\_duplicate\_charge()` | Detect duplicate payments and refund resolution |
+| `check\_duplicate\_charge()` | Identify possible duplicate payments and existing refunds |
 
-| `get\_documents()` | Retrieve document metadata |
+| `get\_documents()` | Retrieve document metadata and file availability |
 
-| `get\_support\_cases()` | Retrieve support cases |
+| `get\_support\_cases()` | List support cases |
 
-| `cancel\_appointment()` | Cancel an appointment with confirmation |
+| `cancel\_appointment()` | Cancel an appointment, subject to confirmation |
 
-| `reschedule\_appointment()` | Reschedule an appointment with confirmation |
+| `reschedule\_appointment()` | Change an appointment, subject to confirmation |
 
-| `issue\_refund()` | Process a refund with confirmation |
+| `issue\_refund()` | Create a refund transaction, subject to confirmation |
 
-| `create\_support\_ticket()` | Create a customer support case |
-
-
-
-The conversational agent currently exposes eight tools. The remaining action tools will be connected in subsequent development steps.
+| `create\_support\_ticket()` | Open a support case |
 
 
 
-\*\*Safety note:\*\* Confirmation handling and backend business-rule validation are still being strengthened. The system is a demonstration, not a production-ready financial or healthcare application.
+\*\*Agent integration:\*\* Eight tools are currently exposed to the conversational agent. Appointment cancellation, rescheduling, and support-ticket creation are implemented in the backend but have not yet been connected to the agent.
 
 
 
-\## Implemented AI Agent
-
-
-
-The text-based agent currently supports:
-
-
-
-\- Local LLM inference with Qwen3:8b
-
-\- LLM-driven tool selection
-
-\- Python function calling
-
-\- Database-backed responses
-
-\- Multiple tool calls within a request
-
-\- Conversation history across turns
-
-\- Confirmation-based refund requests
-
-\- Duplicate-charge investigation and resolution checks
-
-
-
-\### Example Interaction
+\### Example: duplicate-charge investigation
 
 
 
 \*\*Customer:\*\*
 
-"My customer ID is C021. Check whether my duplicate charge has already been resolved."
+
+
+> My customer ID is C021. Check whether my duplicate charge has already been resolved.
 
 
 
-\*\*Agent behavior:\*\*
-
-1\. Selects `check\_duplicate\_charge`
-
-2\. Queries the SQLite database
-
-3\. Identifies two payments of $125 for the same appointment
-
-4\. Detects one completed refund of $125
-
-5\. Recognizes the issue as resolved
-
-6\. Explains the result without initiating another refund
+\*\*Agent workflow:\*\*
 
 
 
-\## Project Structure
+1\. Selects `check\_duplicate\_charge()`.
+
+2\. Queries the synthetic SQLite database.
+
+3\. Finds two completed payments of $125 associated with appointment `A001`.
+
+4\. Finds one completed refund of $125.
+
+5\. Receives `resolution\_status: resolved` from the backend.
+
+6\. Explains that the duplicate-charge issue has already been resolved without attempting another refund.
+
+
+
+This is a controlled demonstration scenario. Matching payments by appointment and amount is a heuristic, not a universally reliable duplicate-payment rule.
+
+
+
+\## Repository structure
 
 
 
@@ -264,49 +258,49 @@ The text-based agent currently supports:
 
 multimodal-voice-agent/
 
-├── .gitignore
+|-- .gitignore
 
-├── README.md
+|-- README.md
 
-├── data/
+|-- data/
 
-│   ├── customer\_support.db       # Generated locally
+|   |-- customer\_support.db       # Generated locally; not tracked
 
-│   └── documents/                # Generated locally
+|   `-- documents/               # Generated locally; not tracked
 
-└── src/
+`-- src/
 
-&#x20;   ├── agent.py
+&#x20;   |-- agent.py                 # Conversational agent
 
-&#x20;   ├── generate\_data.py
+&#x20;   |-- generate\_data.py         # Synthetic SQLite data
 
-&#x20;   ├── generate\_documents.py
+&#x20;   |-- generate\_documents.py    # Synthetic PDFs
 
-&#x20;   ├── test\_tools.py
+&#x20;   |-- test\_tools.py            # Backend tool tests
 
-&#x20;   └── tools.py
+&#x20;   `-- tools.py                 # Database-backed tools
 
 ```
 
 
 
-\## Local Development
+\## Run locally
 
 
 
-\### Requirements
+\### Prerequisites
 
 
 
 \- Python 3.11
 
-\- Ollama
+\- Ollama installed and running
 
-\- Qwen3:8b
+\- Git (optional, for contributing)
 
 
 
-\### Install Python Dependencies
+From the project root, install the current Python dependencies:
 
 
 
@@ -318,7 +312,7 @@ pip install faker reportlab ollama
 
 
 
-\### Download the LLM
+Download the local model:
 
 
 
@@ -330,7 +324,7 @@ ollama pull qwen3:8b
 
 
 
-\### Generate Synthetic Data
+Generate the SQLite database:
 
 
 
@@ -342,7 +336,7 @@ python src/generate\_data.py
 
 
 
-\### Generate Synthetic PDF Documents
+Generate synthetic PDFs:
 
 
 
@@ -354,7 +348,7 @@ python src/generate\_documents.py
 
 
 
-\### Run the Conversational Agent
+Start the text-based agent:
 
 
 
@@ -366,97 +360,111 @@ python src/agent.py
 
 
 
-The database must be generated before using the agent.
+\*\*Note:\*\* The database must be generated before running the agent. The test script may create new support cases, so run it against disposable synthetic data.
 
 
 
-\## Development Roadmap
+\## Development roadmap
 
 
 
-\- \[x] Define project architecture and use cases
+\### Completed
 
-\- \[x] Set up Python development environment
 
-\- \[x] Generate synthetic SQLite dataset
 
-\- \[x] Generate synthetic PDF documents
+\- \[x] Define the project architecture and use cases
 
-\- \[x] Implement database backend tools
+\- \[x] Configure Python and local LLM environment
 
-\- \[x] Integrate Ollama and Qwen3:8b
+\- \[x] Generate and validate synthetic relational data
 
-\- \[x] Implement LLM tool calling
+\- \[x] Generate 30 synthetic PDF documents
 
-\- \[x] Implement conversational text agent
+\- \[x] Implement 11 backend functions
 
-\- \[x] Test duplicate-charge investigation
+\- \[x] Connect Qwen3:8b to Python through Ollama
 
-\- \[ ] Connect appointment cancellation and rescheduling to the agent
+\- \[x] Build a conversational tool-calling agent
 
-\- \[ ] Connect support-ticket creation to the agent
+\- \[x] Test duplicate-charge detection and refund-resolution reporting
 
-\- \[ ] Strengthen human-in-the-loop approval and backend safeguards
+\- \[x] Publish the project to GitHub
 
-\- \[ ] Implement and test multi-step workflows
 
-\- \[ ] Add robust error handling
 
-\- \[ ] Integrate Speech-to-Text
+\### Next: finish the text agent
 
-\- \[ ] Integrate Text-to-Speech
 
-\- \[ ] Build an end-to-end voice agent
+
+\- \[ ] Connect cancellation, rescheduling, and ticket creation to the agent
+
+\- \[ ] Strengthen backend refund safeguards and action validation
+
+\- \[ ] Test multi-step customer support workflows
+
+\- \[ ] Improve error handling and failure recovery
+
+\- \[ ] Review agent architecture and core concepts before voice integration
+
+
+
+\### Planned: voice and multimodal AI
+
+
+
+\- \[ ] Add Speech-to-Text (STT)
+
+\- \[ ] Add Text-to-Speech (TTS)
+
+\- \[ ] Implement an end-to-end voice conversation flow
 
 \- \[ ] Add image and PDF understanding
 
-\- \[ ] Implement RAG for support policies
+\- \[ ] Add retrieval-augmented generation (RAG) for policies
 
-\- \[ ] Integrate Model Context Protocol (MCP)
 
-\- \[ ] Build FastAPI endpoints
 
-\- \[ ] Add observability and tracing
+\### Planned: production-oriented engineering
 
-\- \[ ] Develop an agent evaluation framework
+
+
+\- \[ ] Integrate MCP-compatible tools
+
+\- \[ ] Add FastAPI endpoints
+
+\- \[ ] Implement logging, tracing, and observability
+
+\- \[ ] Build an agent evaluation dataset and tests
 
 \- \[ ] Containerize with Docker
 
 \- \[ ] Build a simple user interface
 
-\- \[ ] Prepare a project demo
+\- \[ ] Prepare a reproducible demo and interview documentation
 
 
 
-\## Data and Safety
+\## Safety and limitations
 
 
 
-All customer, appointment, billing, and document data are synthetic.
+\- All customer and transaction records are \*\*synthetic\*\*.
+
+\- The agent currently relies on a customer ID supplied in conversation; real authentication and authorization have not been implemented.
+
+\- Sensitive actions require stronger backend safeguards, even when the agent asks for confirmation.
+
+\- Refund and appointment tools are demonstrations and should not be connected to real payment or scheduling systems without further validation, auditability, and security controls.
+
+\- Voice, multimodal understanding, RAG, MCP, API serving, and deployment are \*\*not yet implemented\*\*.
 
 
 
-No real patient or financial records are required.
+\## Project updates
 
 
 
-The project is intended for learning, experimentation, and AI engineering portfolio demonstration.
-
-
-
-\## Development Status
-
-
-
-\*\*Current milestone:\*\* Text-based agent with database tools and refund-resolution handling.
-
-
-
-\*\*Next milestone:\*\* Connect remaining action tools and strengthen human-in-the-loop safety.
-
-
-
-This README will be updated as new capabilities are implemented.
+This repository is developed incrementally. New features will be committed and pushed as milestones are completed, with this README updated to reflect actual implementation status.
 
 
 
